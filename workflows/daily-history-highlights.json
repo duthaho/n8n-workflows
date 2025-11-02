@@ -1,0 +1,234 @@
+{
+  "name": "Daily History Highlights",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 7
+            }
+          ]
+        }
+      },
+      "id": "76bb361e-945e-4028-9b60-fb259a6eeb50",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -576,
+        -160
+      ],
+      "notesInFlow": true,
+      "notes": "Chạy mỗi sáng lúc 7:00 AM"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{{ $now.format('MM') }}/{{ $now.format('dd') }}",
+        "options": {}
+      },
+      "id": "d4d502e9-df4c-4616-b2d3-6b4959817397",
+      "name": "Wikipedia OnThisDay API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -352,
+        -160
+      ],
+      "notesInFlow": true,
+      "notes": "Lấy sự kiện lịch sử theo ngày"
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.first().json;\n\nfunction escapeMarkdown(text) {\n  if (!text) return '';\n  return text.replace(/[_*\\[\\]()~`>#+=|{}.!-]/g, '\\\\$&');\n}\n\nfunction cleanText(text) {\n  if (!text) return '';\n  return text.replace(/<[^>]*>/g, '').trim();\n}\n\n// Parse events (top 5) - only keep essential data\nconst events = (data.events || []).slice(0, 5).map(event => {\n  const page = event.pages?.[0];\n  return {\n    year: event.year,\n    text: cleanText(event.text),\n    url: page?.content_urls?.desktop?.page || null\n  };\n});\n\n// Parse births (top 3) - only keep essential data\nconst births = (data.births || []).slice(0, 3).map(birth => {\n  const page = birth.pages?.[0];\n  return {\n    year: birth.year,\n    text: cleanText(birth.text),\n    url: page?.content_urls?.desktop?.page || null\n  };\n});\n\n// Parse deaths (top 3) - only keep essential data\nconst deaths = (data.deaths || []).slice(0, 3).map(death => {\n  const page = death.pages?.[0];\n  return {\n    year: death.year,\n    text: cleanText(death.text),\n    url: page?.content_urls?.desktop?.page || null\n  };\n});\n\n// Format message\nconst today = new Date();\nconst dateStr = today.toLocaleDateString('vi-VN', {\n  day: 'numeric',\n  month: 'long'\n});\n\nlet msg = '📅 *Ngày Này Trong Lịch Sử*\\n';\nmsg += '_' + dateStr + '_\\n\\n';\n\n// Events section\nif (events.length > 0) {\n  msg += '🏛 *SỰ KIỆN LỊCH SỬ*\\n\\n';\n  events.forEach((event, i) => {\n    msg += `*${event.year}* \\\\- ${escapeMarkdown(event.text)}\\n`;\n    if (event.url) {\n      msg += `🔗 [Chi tiết](${event.url})\\n`;\n    }\n    msg += '\\n';\n  });\n}\n\n// Births section\nif (births.length > 0) {\n  msg += '👶 *NGÀY SINH*\\n\\n';\n  births.forEach((birth, i) => {\n    msg += `*${birth.year}* \\\\- ${escapeMarkdown(birth.text)}\\n`;\n    if (birth.url) {\n      msg += `🔗 [Chi tiết](${birth.url})\\n`;\n    }\n    msg += '\\n';\n  });\n}\n\n// Deaths section\nif (deaths.length > 0) {\n  msg += '🕊 *NGÀY MẤT*\\n\\n';\n  deaths.forEach((death, i) => {\n    msg += `*${death.year}* \\\\- ${escapeMarkdown(death.text)}\\n`;\n    if (death.url) {\n      msg += `🔗 [Chi tiết](${death.url})\\n`;\n    }\n    msg += '\\n';\n  });\n}\n\nmsg += '_Nguồn: Wikipedia_';\n\n// Only return the formatted message and minimal data\nreturn [{\n  json: {\n    message: msg\n  }\n}];"
+      },
+      "id": "5886ba27-6c22-4539-9322-aee1c4329dfe",
+      "name": "Parse & Format History",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -160
+      ],
+      "notesInFlow": true,
+      "notes": "Parse events, births, deaths và format Markdown"
+    },
+    {
+      "parameters": {
+        "modelId": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "You are a history expert. Translate the following historical highlights to Vietnamese and add interesting insights or quotes when relevant. Keep it concise and engaging. Format in Markdown.",
+              "role": "system"
+            },
+            {
+              "content": "=Dịch và làm phong phú nội dung lịch sử sau sang tiếng Việt. Thêm thông tin thú vị hoặc câu trích dẫn nếu phù hợp:\\n\\n{{ $json.message }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 2000,
+          "temperature": 0.7
+        }
+      },
+      "id": "0d0d99d9-fbae-495a-a481-d757a2cdf1b7",
+      "name": "AI Enhance (Optional)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        64,
+        -48
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "h9kEnmkvBp3gmv2U",
+          "name": "OpenAi account"
+        }
+      },
+      "notes": "Tùy chọn: Dịch và làm phong phú bằng AI"
+    },
+    {
+      "parameters": {},
+      "id": "9dcbf011-26b2-487e-99e0-142408745167",
+      "name": "Merge Original + AI",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        384,
+        -144
+      ],
+      "notesInFlow": true,
+      "notes": "Merge kết quả gốc và AI"
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst originalData = items[0].json;\nconst aiData = items[1]?.json;\n\n// Check if AI enhancement is available\nlet finalMessage = originalData.message;\n\nif (aiData && aiData.message && aiData.message.content) {\n  // Use AI-enhanced version\n  finalMessage = aiData.message.content;\n  // Add AI attribution\n  finalMessage += '\\n\\n_✨ AI\\\\-enhanced by OpenAI_';\n}\n\n// Only return the final message - no extra data\nreturn [{\n  json: {\n    message: finalMessage\n  }\n}];"
+      },
+      "id": "eb06dd7e-a25d-4d70-845b-2fa16472e29e",
+      "name": "Choose Message Version",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        608,
+        -144
+      ],
+      "notesInFlow": true,
+      "notes": "Chọn phiên bản message (AI hoặc gốc)"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "7adef1a8-19e8-4104-840e-5ac8c7f30a69",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        832,
+        -144
+      ],
+      "webhookId": "7fab8245-91de-405e-9879-5ed707359688",
+      "notesInFlow": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "9lsNu1Nt1dfzyvTY",
+          "name": "duthaho-bot"
+        }
+      },
+      "notes": "Gửi tin nhắn đến Telegram"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Wikipedia OnThisDay API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wikipedia OnThisDay API": {
+      "main": [
+        [
+          {
+            "node": "Parse & Format History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Format History": {
+      "main": [
+        [
+          {
+            "node": "Merge Original + AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Enhance (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Enhance (Optional)": {
+      "main": [
+        [
+          {
+            "node": "Merge Original + AI",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Original + AI": {
+      "main": [
+        [
+          {
+            "node": "Choose Message Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose Message Version": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "62aac601-3ffe-42a3-b8cb-376da100856e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bf8a201b1fdbc7ee203a2f1d3610bdc15168a482b831741a84bcde2a6fd139ac"
+  },
+  "id": "KbpWuZBmQLiSjAVO",
+  "tags": []
+}

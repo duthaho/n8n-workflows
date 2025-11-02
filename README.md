@@ -5,6 +5,7 @@ A collection of useful n8n workflows for automation, powered by Docker.
 ## 🚀 Features
 
 - **Tech Daily Digest**: Automated daily digest from Dev.to, Reddit, Hacker News, and Medium with AI-powered summaries
+- **Daily History Highlights**: "On This Day" historical events from Wikipedia with optional AI-enhanced Vietnamese translation
 - Self-hosted n8n instance with PostgreSQL database
 - Easy setup with Docker Compose
 - Secure configuration with environment variables
@@ -123,6 +124,51 @@ graph TB
     style C2 fill:#FF9800
     style D4 fill:#FF9800
     style E2 fill:#FF9800
+```
+
+---
+
+### 📅 Daily History Highlights
+
+**File:** [`workflows/daily-history-highlights.json`](workflows/daily-history-highlights.json)
+
+**Description:**  
+Delivers daily historical highlights from Wikipedia including major events, births, and deaths that occurred on this day in history. Features optional AI enhancement for Vietnamese translation and enrichment.
+
+**Features:**
+- Fetches "On This Day" events from Wikipedia API
+- Shows top 5 historical events, 3 notable births, and 3 notable deaths
+- Optional AI enhancement for Vietnamese translation and adding interesting insights
+- Daily delivery via Telegram at 7:00 AM (Asia/Ho_Chi_Minh timezone)
+- Includes Wikipedia links for detailed reading
+
+**Requirements:**
+- Telegram Bot Token
+- Telegram Chat ID
+- OpenAI API credentials (optional, for AI enhancement)
+
+**Setup:**
+1. Import the workflow: Copy `workflows/daily-history-highlights.json` or import via n8n UI
+2. Configure Telegram Bot credentials in n8n
+3. Set `TELEGRAM_CHAT_ID` in your `.env` file
+4. (Optional) Configure OpenAI credentials for AI-enhanced translations
+5. Activate the workflow
+
+**Flow Diagram:**
+
+```mermaid
+graph TB
+    A[Cron Trigger<br/>Daily at 7:00 AM] --> B[Wikipedia OnThisDay API<br/>Get Events for Today]
+    B --> C[Parse & Format History<br/>Extract Events, Births, Deaths]
+    C --> D[Merge Original + AI]
+    C --> E[AI Enhance Optional<br/>Translate & Enrich]
+    E --> D
+    D --> F[Choose Message Version<br/>AI or Original]
+    F --> G[Send to Telegram]
+    
+    style A fill:#4CAF50
+    style E fill:#FF9800
+    style G fill:#2196F3
 ```
 
 ## 🔧 Configuration
