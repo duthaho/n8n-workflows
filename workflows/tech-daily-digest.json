@@ -1,0 +1,728 @@
+{
+  "name": "Tech Daily Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 8
+            }
+          ]
+        }
+      },
+      "id": "1d397ba8-0da8-4b38-bcdc-6eacf8baaaba",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -1584,
+        -80
+      ],
+      "notesInFlow": true,
+      "notes": "Chạy mỗi sáng lúc 8:00 AM"
+    },
+    {
+      "parameters": {
+        "url": "https://dev.to/api/articles",
+        "options": {}
+      },
+      "id": "2b8b3c65-aac2-411d-a872-813ad23fcfea",
+      "name": "Dev.to API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1200,
+        -624
+      ],
+      "notesInFlow": true,
+      "notes": "Top 5 từ Dev.to"
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/programming/hot.json",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "id": "981f54b7-f683-4a2d-ab47-e62231cb0cb6",
+      "name": "Reddit API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1200,
+        -336
+      ],
+      "notesInFlow": true,
+      "notes": "Top 5 hot từ r/programming"
+    },
+    {
+      "parameters": {
+        "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+        "options": {}
+      },
+      "id": "219af308-ac69-4b1e-86c5-01d8d49180c9",
+      "name": "Hacker News - Get IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1216,
+        -32
+      ],
+      "notesInFlow": true,
+      "notes": "Lấy top story IDs"
+    },
+    {
+      "parameters": {
+        "url": "https://medium.com/feed/tag/programming",
+        "options": {}
+      },
+      "id": "6ee67684-8758-491c-b9cc-952198e511db",
+      "name": "Medium API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1216,
+        272
+      ],
+      "notesInFlow": true,
+      "notes": "RSS feed từ Medium"
+    },
+    {
+      "parameters": {
+        "functionCode": "const articles = $input.all();\nreturn articles.slice(0, 5).map(item => {\n  const article = item.json;\n  return {\n    json: {\n      title: article.title,\n      url: article.url,\n      source: 'Dev.to',\n      author: article.user?.name || 'Unknown',\n      score: (article.public_reactions_count || 0) + (article.comments_count || 0) * 2,\n      reactions: article.public_reactions_count || 0,\n      comments: article.comments_count || 0,\n      published_at: article.published_at\n    }\n  };\n});"
+      },
+      "id": "e171ca7b-ba35-4c54-93c7-0a155196a951",
+      "name": "Normalize Dev.to",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        -624
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const response = $input.first().json;\nconst posts = response.data?.children || [];\nreturn posts.slice(0, 5).map(item => {\n  const post = item.data;\n  return {\n    json: {\n      title: post.title,\n      url: post.url,\n      source: 'Reddit',\n      author: post.author,\n      score: (post.score || 0) + (post.num_comments || 0),\n      reactions: post.score || 0,\n      comments: post.num_comments || 0,\n      published_at: new Date(post.created_utc * 1000).toISOString()\n    }\n  };\n});"
+      },
+      "id": "a7095ba4-11c1-44af-be0a-060f80271864",
+      "name": "Normalize Reddit",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const allItems = $input.all();\nconst topIds = allItems.slice(0, 5);\nreturn topIds.map(item => ({json: { storyId: item.json }}));"
+      },
+      "id": "954396d5-ce15-4e5e-91c8-ac06133f23be",
+      "name": "Split HN IDs (Top 5)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://hacker-news.firebaseio.com/v0/item/{{ $json.storyId }}.json",
+        "options": {}
+      },
+      "id": "9af23e06-3ba0-452d-9be9-4d9ad101ca1c",
+      "name": "Hacker News - Get Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -816,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nreturn items\n  .filter(item => item.json.type === 'story' && item.json.url)\n  .map(item => {\n    const story = item.json;\n    return {\n      json: {\n        title: story.title,\n        url: story.url,\n        source: 'Hacker News',\n        author: story.by || 'Unknown',\n        score: (story.score || 0) + (story.descendants || 0),\n        reactions: story.score || 0,\n        comments: story.descendants || 0,\n        published_at: new Date(story.time * 1000).toISOString()\n      }\n    };\n  });"
+      },
+      "id": "b292d297-f943-46b0-baaf-2e6c568fab0f",
+      "name": "Normalize Hacker News",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const xml2js = require('xml2js');\nconst parser = new xml2js.Parser();\nconst rss = $input.first().json;\n\nlet items = [];\ntry {\n  const result = await parser.parseStringPromise(rss);\n  const feedItems = result.rss?.channel?.[0]?.item || [];\n  items = feedItems.slice(0, 5).map(item => {\n    return {\n      json: {\n        title: item.title?.[0] || 'No title',\n        url: item.link?.[0] || '',\n        source: 'Medium',\n        author: item['dc:creator']?.[0] || 'Unknown',\n        score: 0,\n        reactions: 0,\n        comments: 0,\n        published_at: item.pubDate?.[0] || new Date().toISOString()\n      }\n    };\n  });\n} catch (e) {\n  items = [{ json: { error: 'Failed to parse Medium RSS' } }];\n}\n\nreturn items;"
+      },
+      "id": "bded8814-29e7-48fd-9422-b27a1dbcb40b",
+      "name": "Normalize Medium",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "You are a tech content summarizer. Provide clear, concise summaries in Vietnamese (1-2 sentences). Focus on the main idea.",
+              "role": "system"
+            },
+            {
+              "content": "=Tóm tắt bài viết này trong 1-2 câu tiếng Việt:\\n\\nTiêu đề: {{ $json.title }}\\nNguồn: {{ $json.source }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 100,
+          "temperature": 0.3
+        }
+      },
+      "id": "449781bd-ce39-4efd-b7f3-21495c0af3fb",
+      "name": "AI Summary - Dev.to",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        -784,
+        -528
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "h9kEnmkvBp3gmv2U",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "You are a tech content summarizer. Provide clear, concise summaries in Vietnamese (1-2 sentences). Focus on the main idea.",
+              "role": "system"
+            },
+            {
+              "content": "=Tóm tắt bài viết này trong 1-2 câu tiếng Việt:\\n\\nTiêu đề: {{ $json.title }}\\nNguồn: {{ $json.source }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 100,
+          "temperature": 0.3
+        }
+      },
+      "id": "d4522f51-17c9-4af4-a8b2-d03c7dab15c3",
+      "name": "AI Summary - Reddit",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        -784,
+        -240
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "h9kEnmkvBp3gmv2U",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "You are a tech content summarizer. Provide clear, concise summaries in Vietnamese (1-2 sentences). Focus on the main idea.",
+              "role": "system"
+            },
+            {
+              "content": "=Tóm tắt bài viết này trong 1-2 câu tiếng Việt:\\n\\nTiêu đề: {{ $json.title }}\\nNguồn: {{ $json.source }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 100,
+          "temperature": 0.3
+        }
+      },
+      "id": "9b472f4b-5869-4cd8-a15d-a3008e7f0b69",
+      "name": "AI Summary - HN",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        -416,
+        64
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "h9kEnmkvBp3gmv2U",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "You are a tech content summarizer. Provide clear, concise summaries in Vietnamese (1-2 sentences). Focus on the main idea.",
+              "role": "system"
+            },
+            {
+              "content": "=Tóm tắt bài viết này trong 1-2 câu tiếng Việt:\\n\\nTiêu đề: {{ $json.title }}\\nNguồn: {{ $json.source }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 100,
+          "temperature": 0.3
+        }
+      },
+      "id": "f7afc118-db73-4501-ae5c-12a6aba5f9c7",
+      "name": "AI Summary - Medium",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        -784,
+        368
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "h9kEnmkvBp3gmv2U",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "da588be4-9d65-4fc2-b372-3b45affda6ed",
+      "name": "Merge Dev.to + AI",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        -416,
+        -608
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "26dcced4-c21c-4b66-8e90-b53511e9d3b1",
+      "name": "Merge Reddit + AI",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        -416,
+        -320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4476c3f9-38a1-450b-b023-7fcf360cc550",
+      "name": "Merge HN + AI",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        -96,
+        -16
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "8bdd12ad-86ae-40cf-b04e-1e9b703756a7",
+      "name": "Merge Medium + AI",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        -400,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst half = Math.floor(items.length / 2);\nconst articles = items.slice(0, half);\nconst summaries = items.slice(half);\nconst source = articles[0]?.json?.source || 'Unknown';\n\nfunction escapeMarkdown(text) {\n  if (!text) return '';\n  return text.replace(/[_*\\[\\]()~`>#+=|{}.!-]/g, '\\\\$&');\n}\n\nconst combined = articles.map((item, index) => {\n  const article = item.json;\n  let summary = '';\n  if (summaries[index]) {\n    const sumData = summaries[index].json;\n    if (sumData.message) {\n      summary = sumData.message.content;\n    }\n  }\n  return { ...article, summary };\n});\n\nconst emoji = {'Dev.to':'📝','Reddit':'🔥','Hacker News':'📰','Medium':'✍️'}[source] || '📌';\nlet msg = emoji + ' *' + source + ' Daily Digest*\\n';\nmsg += '_' + new Date().toLocaleDateString('vi-VN', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'}) + '_\\n\\n';\n\ncombined.forEach((a, i) => {\n  msg += '*' + (i+1) + '\\\\. ' + escapeMarkdown(a.title) + '*\\n';\n  msg += '👤 ' + escapeMarkdown(a.author);\n  if (a.reactions || a.comments) {\n    msg += ' | ❤️ ' + a.reactions + ' | 💬 ' + a.comments;\n  }\n  msg += '\\n';\n  if (a.summary) {\n    msg += '📝 _' + escapeMarkdown(a.summary) + '_\\n';\n  }\n  msg += '🔗 [Đọc thêm](' + a.url + ')\\n\\n';\n});\n\nmsg += '_AI\\\\-powered by OpenAI_';\nreturn [{json: {message: msg}}];"
+      },
+      "id": "f7c7d3a1-c6ea-43b6-94f0-0ce22725c3ee",
+      "name": "Format Dev.to Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        -608
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst half = Math.floor(items.length / 2);\nconst articles = items.slice(0, half);\nconst summaries = items.slice(half);\nconst source = articles[0]?.json?.source || 'Unknown';\n\nfunction escapeMarkdown(text) {\n  if (!text) return '';\n  return text.replace(/[_*\\[\\]()~`>#+=|{}.!-]/g, '\\\\$&');\n}\n\nconst combined = articles.map((item, index) => {\n  const article = item.json;\n  let summary = '';\n  if (summaries[index]) {\n    const sumData = summaries[index].json;\n    if (sumData.message) {\n      summary = sumData.message.content;\n    }\n  }\n  return { ...article, summary };\n});\n\nconst emoji = {'Dev.to':'📝','Reddit':'🔥','Hacker News':'📰','Medium':'✍️'}[source] || '📌';\nlet msg = emoji + ' *' + source + ' Daily Digest*\\n';\nmsg += '_' + new Date().toLocaleDateString('vi-VN', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'}) + '_\\n\\n';\n\ncombined.forEach((a, i) => {\n  msg += '*' + (i+1) + '\\\\. ' + escapeMarkdown(a.title) + '*\\n';\n  msg += '👤 ' + escapeMarkdown(a.author);\n  if (a.reactions || a.comments) {\n    msg += ' | ❤️ ' + a.reactions + ' | 💬 ' + a.comments;\n  }\n  msg += '\\n';\n  if (a.summary) {\n    msg += '📝 _' + escapeMarkdown(a.summary) + '_\\n';\n  }\n  msg += '🔗 [Đọc thêm](' + a.url + ')\\n\\n';\n});\n\nmsg += '_AI\\\\-powered by OpenAI_';\nreturn [{json: {message: msg}}];"
+      },
+      "id": "826bc8c7-b06b-4922-9e15-9a0818e7c646",
+      "name": "Format Reddit Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst half = Math.floor(items.length / 2);\nconst articles = items.slice(0, half);\nconst summaries = items.slice(half);\nconst source = articles[0]?.json?.source || 'Unknown';\n\nfunction escapeMarkdown(text) {\n  if (!text) return '';\n  return text.replace(/[_*\\[\\]()~`>#+=|{}.!-]/g, '\\\\$&');\n}\n\nconst combined = articles.map((item, index) => {\n  const article = item.json;\n  let summary = '';\n  if (summaries[index]) {\n    const sumData = summaries[index].json;\n    if (sumData.message) {\n      summary = sumData.message.content;\n    }\n  }\n  return { ...article, summary };\n});\n\nconst emoji = {'Dev.to':'📝','Reddit':'🔥','Hacker News':'📰','Medium':'✍️'}[source] || '📌';\nlet msg = emoji + ' *' + source + ' Daily Digest*\\n';\nmsg += '_' + new Date().toLocaleDateString('vi-VN', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'}) + '_\\n\\n';\n\ncombined.forEach((a, i) => {\n  msg += '*' + (i+1) + '\\\\. ' + escapeMarkdown(a.title) + '*\\n';\n  msg += '👤 ' + escapeMarkdown(a.author);\n  if (a.reactions || a.comments) {\n    msg += ' | ❤️ ' + a.reactions + ' | 💬 ' + a.comments;\n  }\n  msg += '\\n';\n  if (a.summary) {\n    msg += '📝 _' + escapeMarkdown(a.summary) + '_\\n';\n  }\n  msg += '🔗 [Đọc thêm](' + a.url + ')\\n\\n';\n});\n\nmsg += '_AI\\\\-powered by OpenAI_';\nreturn [{json: {message: msg}}];"
+      },
+      "id": "1e016309-b94f-4b1c-8a16-ed02261d0c9a",
+      "name": "Format HN Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        112,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst half = Math.floor(items.length / 2);\nconst articles = items.slice(0, half);\nconst summaries = items.slice(half);\nconst source = articles[0]?.json?.source || 'Unknown';\n\nfunction escapeMarkdown(text) {\n  if (!text) return '';\n  return text.replace(/[_*\\[\\]()~`>#+=|{}.!-]/g, '\\\\$&');\n}\n\nconst combined = articles.map((item, index) => {\n  const article = item.json;\n  let summary = '';\n  if (summaries[index]) {\n    const sumData = summaries[index].json;\n    if (sumData.message) {\n      summary = sumData.message.content;\n    }\n  }\n  return { ...article, summary };\n});\n\nconst emoji = {'Dev.to':'📝','Reddit':'🔥','Hacker News':'📰','Medium':'✍️'}[source] || '📌';\nlet msg = emoji + ' *' + source + ' Daily Digest*\\n';\nmsg += '_' + new Date().toLocaleDateString('vi-VN', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'}) + '_\\n\\n';\n\ncombined.forEach((a, i) => {\n  msg += '*' + (i+1) + '\\\\. ' + escapeMarkdown(a.title) + '*\\n';\n  msg += '👤 ' + escapeMarkdown(a.author);\n  if (a.reactions || a.comments) {\n    msg += ' | ❤️ ' + a.reactions + ' | 💬 ' + a.comments;\n  }\n  msg += '\\n';\n  if (a.summary) {\n    msg += '📝 _' + escapeMarkdown(a.summary) + '_\\n';\n  }\n  msg += '🔗 [Đọc thêm](' + a.url + ')\\n\\n';\n});\n\nmsg += '_AI\\\\-powered by OpenAI_';\nreturn [{json: {message: msg}}];"
+      },
+      "id": "42ef48ee-8e25-4236-88c2-f40e13bab191",
+      "name": "Format Medium Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "81c08524-56f1-48fc-82e0-2014e017ab19",
+      "name": "Send Dev.to",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        608,
+        -64
+      ],
+      "webhookId": "6ead7244-90cd-404f-9878-4ec606248577",
+      "credentials": {
+        "telegramApi": {
+          "id": "9lsNu1Nt1dfzyvTY",
+          "name": "duthaho-bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Hacker News - Get IDs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reddit API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Dev.to API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dev.to API": {
+      "main": [
+        [
+          {
+            "node": "Normalize Dev.to",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reddit API": {
+      "main": [
+        [
+          {
+            "node": "Normalize Reddit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hacker News - Get IDs": {
+      "main": [
+        [
+          {
+            "node": "Split HN IDs (Top 5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Medium API": {
+      "main": [
+        [
+          {
+            "node": "Normalize Medium",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split HN IDs (Top 5)": {
+      "main": [
+        [
+          {
+            "node": "Hacker News - Get Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hacker News - Get Items": {
+      "main": [
+        [
+          {
+            "node": "Normalize Hacker News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Dev.to": {
+      "main": [
+        [
+          {
+            "node": "Merge Dev.to + AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Summary - Dev.to",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Reddit": {
+      "main": [
+        [
+          {
+            "node": "Merge Reddit + AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Summary - Reddit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Hacker News": {
+      "main": [
+        [
+          {
+            "node": "Merge HN + AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Summary - HN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Medium": {
+      "main": [
+        [
+          {
+            "node": "Merge Medium + AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Summary - Medium",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Summary - Dev.to": {
+      "main": [
+        [
+          {
+            "node": "Merge Dev.to + AI",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Summary - Reddit": {
+      "main": [
+        [
+          {
+            "node": "Merge Reddit + AI",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Summary - HN": {
+      "main": [
+        [
+          {
+            "node": "Merge HN + AI",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Summary - Medium": {
+      "main": [
+        [
+          {
+            "node": "Merge Medium + AI",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Dev.to + AI": {
+      "main": [
+        [
+          {
+            "node": "Format Dev.to Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Reddit + AI": {
+      "main": [
+        [
+          {
+            "node": "Format Reddit Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge HN + AI": {
+      "main": [
+        [
+          {
+            "node": "Format HN Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Medium + AI": {
+      "main": [
+        [
+          {
+            "node": "Format Medium Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Dev.to Message": {
+      "main": [
+        [
+          {
+            "node": "Send Dev.to",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reddit Message": {
+      "main": [
+        [
+          {
+            "node": "Send Dev.to",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format HN Message": {
+      "main": [
+        [
+          {
+            "node": "Send Dev.to",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Medium Message": {
+      "main": [
+        [
+          {
+            "node": "Send Dev.to",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c5306d41-0ab7-4c24-a652-41b9c5c2bf7d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bf8a201b1fdbc7ee203a2f1d3610bdc15168a482b831741a84bcde2a6fd139ac"
+  },
+  "id": "FqLG5mPGg2guKKp3",
+  "tags": []
+}
