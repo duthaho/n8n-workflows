@@ -1,0 +1,814 @@
+{
+  "name": "Daily Newsletter Aggregator",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 9
+            }
+          ]
+        }
+      },
+      "id": "76039aa6-9cfa-41cc-9454-7bbe1f8cc47b",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        112
+      ],
+      "notesInFlow": true,
+      "notes": "Chạy mỗi ngày 9:00 AM"
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/feed/",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "98687f66-1231-4c54-bc5e-96efd51bd2ec",
+      "name": "TechCrunch RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -112
+      ],
+      "notesInFlow": true,
+      "notes": "TechCrunch RSS Feed"
+    },
+    {
+      "parameters": {
+        "url": "https://www.theverge.com/rss/index.xml",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "4b7c5fab-0772-403f-8e43-eebbfa39927b",
+      "name": "The Verge RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        16
+      ],
+      "notesInFlow": true,
+      "notes": "The Verge RSS Feed"
+    },
+    {
+      "parameters": {
+        "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "8f70e2f5-3192-4edd-855f-6722309ae09e",
+      "name": "Hacker News API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        128
+      ],
+      "notesInFlow": true,
+      "notes": "Top stories from HN"
+    },
+    {
+      "parameters": {
+        "url": "https://dev.to/api/articles?top=1",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e57f232b-30f6-44a2-9009-2d1bd8e1a057",
+      "name": "Dev.to API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        256
+      ],
+      "notesInFlow": true,
+      "notes": "Top Dev.to articles"
+    },
+    {
+      "parameters": {
+        "url": "https://stackoverflow.blog/feed/",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ad31c0e2-c2c8-4e12-8034-484dc2ba2904",
+      "name": "Stack Overflow Blog",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        368
+      ],
+      "notesInFlow": true,
+      "notes": "Stack Overflow Blog RSS"
+    },
+    {
+      "parameters": {
+        "functionCode": "const rawData = $input.first().json.data;\nconst source = 'TechCrunch';\n\nif (!rawData) {\n  return [{ json: { source: source, error: 'No data received' } }];\n}\n\ntry {\n  const xmlString = rawData;\n  const itemRegex = /<item>([\\s\\S]*?)<\\/item>/g;\n  const items = [];\n  \n  let match;\n  let count = 0;\n  \n  while ((match = itemRegex.exec(xmlString)) !== null && count < 5) {\n    const itemXml = match[1];\n    \n    // Extract fields - handle both with and without CDATA\n    const titleMatch = itemXml.match(/<title>(?:<!\\[CDATA\\[)?([^\\]<]+)(?:\\]\\]>)?<\\/title>/);\n    const linkMatch = itemXml.match(/<link>([^<]+)<\\/link>/);\n    const descMatch = itemXml.match(/<description>(?:<!\\[CDATA\\[)?([^\\]]+)(?:\\]\\]>)?<\\/description>/);\n    const pubDateMatch = itemXml.match(/<pubDate>([^<]+)<\\/pubDate>/);\n    const categoryMatch = itemXml.match(/<category>(?:<!\\[CDATA\\[)?([^\\]<]+)(?:\\]\\]>)?<\\/category>/);\n    \n    if (titleMatch && linkMatch && pubDateMatch) {\n      const pubDate = new Date(pubDateMatch[1].trim());\n      const today = new Date();\n      const hoursDiff = (today - pubDate) / (1000 * 60 * 60);\n      \n      // Include articles from last 48 hours\n      if (hoursDiff <= 48 && !isNaN(hoursDiff)) {\n        items.push({\n          json: {\n            title: titleMatch[1].trim(),\n            link: linkMatch[1].trim(),\n            description: descMatch ? descMatch[1].trim().substring(0, 200) : '',\n            source: source,\n            date: pubDateMatch[1].trim(),\n            category: categoryMatch ? categoryMatch[1].trim() : 'Tech'\n          }\n        });\n        count++;\n      }\n    }\n  }\n  \n  return items.length > 0 ? items : [{ json: { source: source, error: 'No recent articles found' } }];\n} catch (e) {\n  return [{ json: { source: source, error: 'Parse error: ' + e.message } }];\n}"
+      },
+      "id": "08fbe3dc-4845-4498-9c2e-1b4164d29656",
+      "name": "Normalize TechCrunch",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const rawData = $input.first().json.data;\nconst source = 'The Verge';\n\nif (!rawData) {\n  return [{ json: { source: source, error: 'No data received' } }];\n}\n\ntry {\n  const xmlString = rawData;\n  // The Verge uses Atom format with <entry> instead of <item>\n  const entryRegex = /<entry>([\\s\\S]*?)<\\/entry>/g;\n  const items = [];\n  \n  let match;\n  let count = 0;\n  \n  while ((match = entryRegex.exec(xmlString)) !== null && count < 5) {\n    const entryXml = match[1];\n    \n    // Atom format uses different tags\n    const titleMatch = entryXml.match(/<title[^>]*>(?:<!\\[CDATA\\[)?([^\\]<]+)(?:\\]\\]>)?<\\/title>/);\n    const linkMatch = entryXml.match(/<link[^>]*href=\"([^\"]+)\"/);\n    // Fix: Match everything until ]]> for CDATA content\n    const summaryMatch = entryXml.match(/<summary[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/summary>/);\n    const publishedMatch = entryXml.match(/<published>([^<]+)<\\/published>/);\n    const updatedMatch = entryXml.match(/<updated>([^<]+)<\\/updated>/);\n    \n    // Use published date if available, otherwise use updated\n    const dateMatch = publishedMatch || updatedMatch;\n    \n    if (titleMatch && linkMatch && dateMatch) {\n      const pubDate = new Date(dateMatch[1].trim());\n      const today = new Date();\n      const hoursDiff = (today - pubDate) / (1000 * 60 * 60);\n      \n      if (hoursDiff <= 48 && !isNaN(hoursDiff)) {\n        items.push({\n          json: {\n            title: titleMatch[1].trim(),\n            link: linkMatch[1].trim(),\n            description: summaryMatch ? summaryMatch[1].trim().replace(/<[^>]*>/g, '').substring(0, 200) : '',\n            source: source,\n            date: dateMatch[1].trim(),\n            category: 'Tech'\n          }\n        });\n        count++;\n      }\n    }\n  }\n  \n  return items.length > 0 ? items : [{ json: { source: source, error: 'No recent articles found' } }];\n} catch (e) {\n  return [{ json: { source: source, error: 'Parse error: ' + e.message } }];\n}"
+      },
+      "id": "7cbe53c0-6153-4008-82ce-4a01f4e85dee",
+      "name": "Normalize The Verge",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        416,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const allItems = $input.all();\nconst topIds = allItems.slice(0, 10);\nreturn topIds.map(item => ({json: { storyId: item.json }}));"
+      },
+      "id": "826a6f47-29d5-44a6-8d22-27374195aafb",
+      "name": "Split HN IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        416,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://hacker-news.firebaseio.com/v0/item/{{ $json.storyId }}.json",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "77823292-81dd-4086-9764-523440037b9e",
+      "name": "Get HN Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst source = 'Hacker News';\n\nconst result = items\n  .filter(item => {\n    const story = item.json;\n    if (story.type !== 'story' || !story.url) return false;\n    \n    const storyDate = new Date(story.time * 1000);\n    const today = new Date();\n    const hoursDiff = (today - storyDate) / (1000 * 60 * 60);\n    return hoursDiff <= 24;\n  })\n  .map(item => {\n    const story = item.json;\n    return {\n      json: {\n        title: story.title || 'No title',\n        link: story.url || '',\n        description: story.title || '',\n        source: source,\n        date: new Date(story.time * 1000).toISOString(),\n        category: 'Tech',\n        score: story.score || 0\n      }\n    };\n  });\n\nreturn result.length > 0 ? result : [{ json: { source: source, error: 'No recent articles' } }];"
+      },
+      "id": "1b952d65-f386-44af-9d51-517d0e9f860a",
+      "name": "Normalize HN",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const articles = $input.all();\nconst source = 'Dev.to';\n\nconst result = articles.slice(0, 5).map(item => {\n  const article = item.json;\n  const pubDate = new Date(article.published_at);\n  const today = new Date();\n  const hoursDiff = (today - pubDate) / (1000 * 60 * 60);\n  \n  if (hoursDiff <= 24) {\n    return {\n      json: {\n        title: article.title || 'No title',\n        link: article.url || '',\n        description: article.description?.substring(0, 200) || '',\n        source: source,\n        date: article.published_at || new Date().toISOString(),\n        category: 'Programming'\n      }\n    };\n  }\n}).filter(Boolean);\n\nreturn result.length > 0 ? result : [{ json: { source: source, error: 'No recent articles' } }];"
+      },
+      "id": "05c1b21f-ab98-4095-9397-366ce3b2a1ff",
+      "name": "Normalize Dev.to",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        416,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const rawData = $input.first().json.data;\nconst source = 'Stack Overflow';\n\nif (!rawData) {\n  return [{ json: { source: source, error: 'No data received' } }];\n}\n\ntry {\n  const xmlString = rawData;\n  const itemRegex = /<item>([\\s\\S]*?)<\\/item>/g;\n  const items = [];\n  \n  let match;\n  let count = 0;\n  \n  while ((match = itemRegex.exec(xmlString)) !== null && count < 3) {\n    const itemXml = match[1];\n    \n    const titleMatch = itemXml.match(/<title>(?:<!\\[CDATA\\[)?([^\\]<]+)(?:\\]\\]>)?<\\/title>/);\n    const linkMatch = itemXml.match(/<link>([^<]+)<\\/link>/);\n    const descMatch = itemXml.match(/<description>(?:<!\\[CDATA\\[)?([^\\]]+)(?:\\]\\]>)?<\\/description>/);\n    const pubDateMatch = itemXml.match(/<pubDate>([^<]+)<\\/pubDate>/);\n    \n    if (titleMatch && linkMatch && pubDateMatch) {\n      const pubDate = new Date(pubDateMatch[1].trim());\n      const today = new Date();\n      const hoursDiff = (today - pubDate) / (1000 * 60 * 60);\n      \n      // 72 hours for Stack Overflow (posts less frequently)\n      if (hoursDiff <= 72 && !isNaN(hoursDiff)) {\n        items.push({\n          json: {\n            title: titleMatch[1].trim(),\n            link: linkMatch[1].trim(),\n            description: descMatch ? descMatch[1].trim().replace(/<[^>]*>/g, '').substring(0, 200) : '',\n            source: source,\n            date: pubDateMatch[1].trim(),\n            category: 'Programming'\n          }\n        });\n        count++;\n      }\n    }\n  }\n  \n  return items.length > 0 ? items : [{ json: { source: source, error: 'No recent articles found' } }];\n} catch (e) {\n  return [{ json: { source: source, error: 'Parse error: ' + e.message } }];\n}"
+      },
+      "id": "41781298-72f3-4bd4-b9ef-204892c5fda1",
+      "name": "Normalize Stack Overflow",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        416,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nfunction escapeMarkdown(text) {\n  if (!text) return '';\n  return text.replace(/[_*\\[\\]()~`>#+=|{}.!-]/g, '\\\\$&');\n}\n\nconst sourceEmoji = {\n  'TechCrunch': '🚀',\n  'The Verge': '📱',\n  'Hacker News': '🔥',\n  'Dev.to': '💻',\n  'Stack Overflow': '📚'\n};\n\nconst articles = items.filter(item => !item.json.error);\n\nif (articles.length === 0) {\n  return [];\n}\n\n// Return each article as separate message\nreturn articles.map(item => {\n  const a = item.json;\n  const emoji = sourceEmoji[a.source] || '📌';\n  \n  let msg = emoji + ' *' + escapeMarkdown(a.source) + '*\\n\\n';\n  msg += '*' + escapeMarkdown(a.title) + '*\\n';\n  \n  if (a.description) {\n    msg += '_' + escapeMarkdown(a.description) + '_\\n';\n  }\n  \n  if (a.score) {\n    msg += '⭐ Score: ' + a.score + '\\n';\n  }\n  \n  msg += '🔗 [Read more](' + a.link + ')';\n  \n  return {\n    json: {\n      message: msg,\n      link: a.link,\n      title: a.title,\n      source: a.source\n    }\n  };\n});"
+      },
+      "id": "02ed4837-6da2-4f34-bd40-72461bc572f1",
+      "name": "Format Articles",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "💾 Save to Notion",
+                    "additionalFields": {
+                      "callback_data": "={{ JSON.stringify({action: 'save', link: $json.link, title: $json.title, source: $json.source}).substring(0, 64) }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "id": "a9eca85b-d551-4a2b-8f26-d65830487fa4",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        144
+      ],
+      "webhookId": "1636d230-305d-4d4d-afd1-8e208e3bcf45",
+      "credentials": {
+        "telegramApi": {
+          "id": "9lsNu1Nt1dfzyvTY",
+          "name": "duthaho-bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "4131b0fe-e404-4e20-9c0d-6d0a14527dc0",
+      "name": "Telegram Button Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        512
+      ],
+      "webhookId": "telegram-callback-webhook",
+      "notesInFlow": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "9lsNu1Nt1dfzyvTY",
+          "name": "duthaho-bot"
+        }
+      },
+      "notes": "Triggered when user clicks Save button"
+    },
+    {
+      "parameters": {
+        "functionCode": "const callback = $json.callback_query;\n\nif (!callback || !callback.message) {\n  return [];\n}\n\ntry {\n  const message = callback.message;\n  const text = message.text || '';\n  const entities = message.entities || [];\n  \n  // Extract source from first line (emoji + source name)\n  const firstLine = text.split('\\n')[0];\n  const source = firstLine.replace(/^[^a-zA-Z]+/, '').trim();\n  \n  // Extract title (bold text, skip the first bold which is source)\n  const boldEntities = entities.filter(e => e.type === 'bold');\n  let title = 'Untitled';\n  if (boldEntities.length > 1) {\n    const titleEntity = boldEntities[1];\n    title = text.substring(titleEntity.offset, titleEntity.offset + titleEntity.length);\n  }\n  \n  // Extract link from text_link entity\n  const linkEntity = entities.find(e => e.type === 'text_link');\n  const link = linkEntity ? linkEntity.url : '';\n  \n  if (!link) {\n    return [{ json: { error: 'No link found in message' } }];\n  }\n  \n  return [{\n    json: {\n      link: link,\n      title: title,\n      source: source,\n      savedAt: new Date().toISOString(),\n      chatId: message.chat.id,\n      messageId: message.message_id,\n      callbackQueryId: callback.id\n    }\n  }];\n} catch (e) {\n  return [{ json: { error: 'Failed to parse message: ' + e.message } }];\n}"
+      },
+      "id": "5f4ca72e-b5ff-459b-a919-f7ce1fcd7f6c",
+      "name": "Parse Button Callback",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        192,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $json.callbackQueryId }}",
+        "additionalFields": {
+          "text": "✅ Saved! Processing with AI..."
+        }
+      },
+      "id": "7ae62f0c-dae1-41a1-9293-cd7b35455201",
+      "name": "Answer Callback Query",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        416,
+        512
+      ],
+      "webhookId": "109d4ec9-6179-4ffb-8c73-85f1c8f32ab9",
+      "credentials": {
+        "telegramApi": {
+          "id": "9lsNu1Nt1dfzyvTY",
+          "name": "duthaho-bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Pass through original parsed data from Parse Button Callback\nconst originalData = $('Parse Button Callback').first().json;\nreturn [{ json: originalData }];"
+      },
+      "id": "98be4a71-b38e-42f0-b456-012ac8ed8a56",
+      "name": "Pass Original Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        864,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Parse Button Callback').first().json.link }}",
+        "options": {}
+      },
+      "id": "d3bd394f-4ce6-4518-bf3d-7c54136fb39d",
+      "name": "Fetch Article Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert tech researcher and analyst. Analyze the given article deeply and provide comprehensive insights in Vietnamese. Include:\\n\\n1. **Tóm tắt chi tiết** (3-4 đoạn)\\n2. **Key Takeaways** (bullet points)\\n3. **Context & Background** (tại sao quan trọng)\\n4. **Pros & Cons** (nếu có)\\n5. **Related Technologies/Concepts**\\n6. **Practical Applications**\\n7. **Tags** (5-7 keywords)\\n\\nFormat in clear Markdown.",
+              "role": "system"
+            },
+            {
+              "content": "=Phân tích chi tiết bài viết sau và tạo research report đầy đủ:\\n\\n{{ $json.data }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 2000,
+          "temperature": 0.7
+        }
+      },
+      "id": "7df45a0f-ee98-47ca-9639-da3d7eec6f8d",
+      "name": "AI Deep Research",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        928,
+        416
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "h9kEnmkvBp3gmv2U",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "4c7b4783-545d-49c4-8804-0c05b70b07ca",
+      "name": "Merge Content + Research",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// After merge by position, all data is in the first item\nconst data = $input.first().json;\n\nconst researchContent = data?.message?.content || 'Research not available';\n\n// Use the title from merged data (parsed from Telegram message)\nconst title = data.title || 'Saved Article';\n\n// Extract tags from research (look for Tags section)\nconst tagsMatch = researchContent.match(/Tags[:\\s]+(.+)/i);\nlet tags = [];\nif (tagsMatch) {\n  // Split by comma and clean up each tag\n  tags = tagsMatch[1].split(',').map(t => t.trim().replace(/^#/, ''));\n} else {\n  tags = ['tech', 'research'];\n}\n\n// Ensure tags is always an array\ntags = Array.isArray(tags) ? tags : [tags];\n\nreturn [{\n  json: {\n    title: title,\n    link: data.link,\n    research: researchContent,\n    tags: tags,\n    savedAt: data.savedAt,\n    status: 'Researched',\n    chatId: data.chatId,\n    source: data.source\n  }\n}];"
+      },
+      "id": "aeaa0c59-7736-4b17-9222-1a59a5f93aae",
+      "name": "Prepare for Notion",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1504,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.NOTION_DATABASE_ID }}"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "URL|url",
+              "urlValue": "={{ $json.link }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "={{ $json.source }}"
+            },
+            {
+              "key": "Tags|multi_select",
+              "multiSelectValue": "={{ $json.tags }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "={{ $json.status }}"
+            },
+            {
+              "key": "Saved At|date",
+              "date": "={{ $json.savedAt }}"
+            }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "textContent": "={{ $json.research.substring(0, 2000) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b0932b4f-f35b-4ee5-b593-063e83f5fc35",
+      "name": "Save to Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1728,
+        560
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "XqFXUl3OOhQLDDWC",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Get the Notion page response and original data from Prepare for Notion\nconst notionPage = $input.first().json;\nconst originalData = $('Prepare for Notion').first().json;\n\nreturn [{\n  json: {\n    chatId: originalData.chatId,\n    title: originalData.title,\n    source: originalData.source,\n    url: notionPage.url\n  }\n}];"
+      },
+      "id": "642850f0-be35-4257-9b66-71ddb2b0312c",
+      "name": "Prepare Confirmation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=✅ *Article Saved to Notion\\!*\\n\\n*Title:* {{ $json.title.replace(/[_*\\[\\]()~`>#+=|{}.!-]/g, '\\\\$&') }}\\n*Source:* {{ $json.source }}\\n🔗 [View in Notion]({{ $json.url }})",
+        "additionalFields": {
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "id": "cdc4f5f8-618a-42ed-94cd-c762afa4006a",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2128,
+        560
+      ],
+      "webhookId": "6a980ff1-8c85-4314-bea7-116e9d1fcc92",
+      "credentials": {
+        "telegramApi": {
+          "id": "9lsNu1Nt1dfzyvTY",
+          "name": "duthaho-bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "TechCrunch RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "The Verge RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Hacker News API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Dev.to API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Stack Overflow Blog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TechCrunch RSS": {
+      "main": [
+        [
+          {
+            "node": "Normalize TechCrunch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "The Verge RSS": {
+      "main": [
+        [
+          {
+            "node": "Normalize The Verge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hacker News API": {
+      "main": [
+        [
+          {
+            "node": "Split HN IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dev.to API": {
+      "main": [
+        [
+          {
+            "node": "Normalize Dev.to",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stack Overflow Blog": {
+      "main": [
+        [
+          {
+            "node": "Normalize Stack Overflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize TechCrunch": {
+      "main": [
+        [
+          {
+            "node": "Format Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize The Verge": {
+      "main": [
+        [
+          {
+            "node": "Format Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split HN IDs": {
+      "main": [
+        [
+          {
+            "node": "Get HN Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get HN Items": {
+      "main": [
+        [
+          {
+            "node": "Normalize HN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize HN": {
+      "main": [
+        [
+          {
+            "node": "Format Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Dev.to": {
+      "main": [
+        [
+          {
+            "node": "Format Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Stack Overflow": {
+      "main": [
+        [
+          {
+            "node": "Format Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Articles": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Button Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Button Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Button Callback": {
+      "main": [
+        [
+          {
+            "node": "Answer Callback Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Callback Query": {
+      "main": [
+        [
+          {
+            "node": "Fetch Article Content",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pass Original Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pass Original Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Content + Research",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch Article Content": {
+      "main": [
+        [
+          {
+            "node": "AI Deep Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Deep Research": {
+      "main": [
+        [
+          {
+            "node": "Merge Content + Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Content + Research": {
+      "main": [
+        [
+          {
+            "node": "Prepare for Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Notion": {
+      "main": [
+        [
+          {
+            "node": "Save to Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Notion": {
+      "main": [
+        [
+          {
+            "node": "Prepare Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a47e53ee-32ef-4e4d-afd1-96e614ef604b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bf8a201b1fdbc7ee203a2f1d3610bdc15168a482b831741a84bcde2a6fd139ac"
+  },
+  "id": "Apk6cprfDUiMz34m",
+  "tags": []
+}

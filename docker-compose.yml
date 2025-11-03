@@ -53,6 +53,9 @@ services:
       # Telegram Chat ID for workflow
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
 
+      # Notion Database ID for newsletter aggregator workflow
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID}
+
 volumes:
   n8n_data:
   postgres_data:
